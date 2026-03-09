@@ -224,11 +224,25 @@ async function init() {
       created_at TEXT DEFAULT (datetime('now'))
     )`)
   sqlDb.run(`CREATE TABLE IF NOT EXISTS form_requests (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, form_type TEXT NOT NULL, title TEXT,
-      status TEXT DEFAULT 'pending', priority TEXT DEFAULT 'normal',
-      requested_by INTEGER, assigned_to INTEGER, data TEXT, notes TEXT,
-      created_at TEXT DEFAULT (datetime('now')), resolved_at TEXT
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      form_type TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT,
+      status TEXT DEFAULT 'submitted',
+      priority TEXT DEFAULT 'normal',
+      requested_by INTEGER,
+      assigned_to INTEGER,
+      review_notes TEXT,
+      data TEXT,
+      notes TEXT,
+      submitted_at TEXT DEFAULT (datetime('now')),
+      resolved_at TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
     )`)
+  // Migrate existing form_requests table (add missing columns if needed)
+  try { sqlDb.run(`ALTER TABLE form_requests ADD COLUMN description TEXT`) } catch(e) {}
+  try { sqlDb.run(`ALTER TABLE form_requests ADD COLUMN review_notes TEXT`) } catch(e) {}
+  try { sqlDb.run(`ALTER TABLE form_requests ADD COLUMN submitted_at TEXT`) } catch(e) {}
   sqlDb.run(`CREATE TABLE IF NOT EXISTS maintenance_orders (
       id INTEGER PRIMARY KEY AUTOINCREMENT, machine_id INTEGER,
       type TEXT DEFAULT 'preventive', priority TEXT DEFAULT 'normal',
