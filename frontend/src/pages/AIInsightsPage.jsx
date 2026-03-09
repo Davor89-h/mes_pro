@@ -56,7 +56,7 @@ export default function AIInsightsPage() {
           <div style={{ fontSize:11,color:C.muted2,marginTop:3 }}>
             {ai_powered
               ? <span style={{ color:C.green }}>✦ Claude AI aktivna analiza</span>
-              : <span style={{ color:C.orange }}>⚠ Pravilima bazirana analiza (AI nije konfiguriran)</span>
+              : <span style={{ color:C.teal }}>✦ Lokalni AI — live podaci iz vaše baze</span>
             }
           </div>
         </div>
@@ -67,7 +67,7 @@ export default function AIInsightsPage() {
       </div>
 
       {/* Info banner ako AI nije konfiguriran */}
-      {!ai_powered && infoMsg && (
+      {!ai_powered && !data?.local_ai && infoMsg && (
         <div style={{ padding:'12px 18px',background:`${C.orange}12`,border:`1px solid ${C.orange}33`,borderRadius:12,marginBottom:20,display:'flex',gap:10,alignItems:'flex-start' }}>
           <Info size={16} color={C.orange} style={{ flexShrink:0,marginTop:1 }}/>
           <div>
@@ -115,7 +115,7 @@ export default function AIInsightsPage() {
         <Brain size={14} color={C.teal}/>
         {ai_powered
           ? 'AI analiza generirana pomoću Claude — temelji se na stvarnim podacima iz sustava.'
-          : 'Pravilima bazirana analiza. Postavi ANTHROPIC_API_KEY za pravu AI analizu.'}
+          : 'Lokalni AI — čita live podatke iz vaše baze (strojevi, alati, nalozi, naprave, DMS...). Nema vanjskih poziva.'}
         {data?.generated_at && (
           <span style={{ marginLeft:'auto' }}>
             {new Date(data.generated_at).toLocaleTimeString('hr-HR')}

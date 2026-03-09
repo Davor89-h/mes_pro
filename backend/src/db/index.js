@@ -239,6 +239,18 @@ async function init() {
       resolved_at TEXT,
       created_at TEXT DEFAULT (datetime('now'))
     )`)
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS trainings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      employee_id INTEGER,
+      title TEXT NOT NULL,
+      date TEXT,
+      status TEXT DEFAULT 'scheduled',
+      notes TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`)
+
+  try { sqlDb.run('ALTER TABLE documents ADD COLUMN expiry_date TEXT') } catch(e) {}
+
   // Migrate existing form_requests table (add missing columns if needed)
   try { sqlDb.run(`ALTER TABLE form_requests ADD COLUMN description TEXT`) } catch(e) {}
   try { sqlDb.run(`ALTER TABLE form_requests ADD COLUMN review_notes TEXT`) } catch(e) {}

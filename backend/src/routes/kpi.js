@@ -1,5 +1,5 @@
 const router = require('express').Router()
-const db = require('../db')
+// db is now req.db (tenant-isolated, set by tenantMiddleware)
 const { auth } = require('../middleware/auth')
 
 router.get('/overview', auth, (req, res) => {
@@ -7,25 +7,25 @@ router.get('/overview', auth, (req, res) => {
     const today = new Date().toISOString().split('T')[0]
     const month30 = new Date(Date.now()-30*86400000).toISOString().split('T')[0]
 
-    const sales_active = db.prepare("SELECT COUNT(*) as c FROM sales_orders WHERE status NOT IN ('isporučena','otkazana')")?.get()?.c || 0
-    const sales_delivered = db.prepare("SELECT COUNT(*) as c FROM sales_orders WHERE status='isporučena' AND created_at >= ?")?.get(month30)?.c || 0
-    const sales_overdue = db.prepare("SELECT COUNT(*) as c FROM sales_orders WHERE delivery_date < ? AND status NOT IN ('isporučena','otkazana')")?.get(today)?.c || 0
+    const sales_active = req.db.prepare("SELECT COUNT(*) as c FROM sales_orders WHERE status NOT IN ('isporučena','otkazana')")?.get()?.c || 0
+    const sales_delivered = req.db.prepare("SELECT COUNT(*) as c FROM sales_orders WHERE status='isporučena' AND created_at >= ?")?.get(month30)?.c || 0
+    const sales_overdue = req.db.prepare("SELECT COUNT(*) as c FROM sales_orders WHERE delivery_date < ? AND status NOT IN ('isporučena','otkazana')")?.get(today)?.c || 0
 
-    const q_approved = db.prepare("SELECT COUNT(*) as c FROM quality_checks WHERE status='odobreno' AND checked_at >= ?")?.get(month30)?.c || 0
-    const q_rejected = db.prepare("SELECT COUNT(*) as c FROM quality_checks WHERE status='odbijeno' AND checked_at >= ?")?.get(month30)?.c || 0
-    const q_pending = db.prepare("SELECT COUNT(*) as c FROM quality_checks WHERE status='na_cekanju'")?.get()?.c || 0
+    const q_approved = req.db.prepare("SELECT COUNT(*) as c FROM quality_checks WHERE status='odobreno' AND checked_at >= ?")?.get(month30)?.c || 0
+    const q_rejected = req.db.prepare("SELECT COUNT(*) as c FROM quality_checks WHERE status='odbijeno' AND checked_at >= ?")?.get(month30)?.c || 0
+    const q_pending = req.db.prepare("SELECT COUNT(*) as c FROM quality_checks WHERE status='na_cekanju'")?.get()?.c || 0
 
-    const machines = db.prepare('SELECT status, COUNT(*) as c FROM machines GROUP BY status').all()
+    const machines = req.db.prepare('SELECT status, COUNT(*) as c FROM machines GROUP BY status').all()
     const mc = {}; machines.forEach(m => { mc[m.status] = m.c })
 
-    const maint_urgent = db.prepare("SELECT COUNT(*) as c FROM maintenance_orders WHERE priority='urgent' AND status!='completed'")?.get()?.c || 0
-    const maint_open = db.prepare("SELECT COUNT(*) as c FROM maintenance_orders WHERE status='open'")?.get()?.c || 0
+    const maint_urgent = req.db.prepare("SELECT COUNT(*) as c FROM maintenance_orders WHERE priority='urgent' AND status!='completed'")?.get()?.c || 0
+    const maint_open = req.db.prepare("SELECT COUNT(*) as c FROM maintenance_orders WHERE status='open'")?.get()?.c || 0
 
-    const wh_low = db.prepare('SELECT COUNT(*) as c FROM warehouse_items WHERE current_qty <= min_qty AND min_qty > 0')?.get()?.c || 0
+    const wh_low = req.db.prepare('SELECT COUNT(*) as c FROM warehouse_items WHERE current_qty <= min_qty AND min_qty > 0')?.get()?.c || 0
 
-    const hr_total = db.prepare('SELECT COUNT(*) as c FROM employees WHERE active=1')?.get()?.c || 0
-    const hr_present = db.prepare('SELECT COUNT(*) as c FROM attendance WHERE date=? AND status="present"')?.get(today)?.c || 0
-    const hr_leaves = db.prepare("SELECT COUNT(*) as c FROM leave_requests WHERE status='pending'")?.get()?.c || 0
+    const hr_total = req.db.prepare('SELECT COUNT(*) as c FROM employees WHERE active=1')?.get()?.c || 0
+    const hr_present = req.db.prepare('SELECT COUNT(*) as c FROM attendance WHERE date=? AND status="present"')?.get(today)?.c || 0
+    const hr_leaves = req.db.prepare("SELECT COUNT(*) as c FROM leave_requests WHERE status='pending'")?.get()?.c || 0
 
     res.json({
       generated_at: new Date().toISOString(),
@@ -44,16 +44,16 @@ router.get('/overview', auth, (req, res) => {
 
 router.get('/sales-funnel', auth, (req, res) => {
   const d90 = new Date(Date.now()-90*86400000).toISOString().split('T')[0]
-  const rfqs = db.prepare('SELECT COUNT(*) as c FROM sales_rfqs WHERE created_at >= ?').get(d90).c
-  const offers = db.prepare("SELECT COUNT(*) as c FROM sales_rfqs WHERE status='ponuda_poslana' AND created_at >= ?").get(d90).c
-  const orders = db.prepare('SELECT COUNT(*) as c FROM sales_orders WHERE created_at >= ?').get(d90).c
-  const invoices = db.prepare('SELECT COUNT(*) as c FROM sales_invoices WHERE created_at >= ?').get(d90).c
-  const paid = db.prepare("SELECT COALESCE(SUM(total_amount),0) as s FROM sales_invoices WHERE status='plaćena' AND created_at >= ?").get(d90).s
+  const rfqs = req.db.prepare('SELECT COUNT(*) as c FROM sales_rfqs WHERE created_at >= ?').get(d90).c
+  const offers = req.db.prepare("SELECT COUNT(*) as c FROM sales_rfqs WHERE status='ponuda_poslana' AND created_at >= ?").get(d90).c
+  const orders = req.db.prepare('SELECT COUNT(*) as c FROM sales_orders WHERE created_at >= ?').get(d90).c
+  const invoices = req.db.prepare('SELECT COUNT(*) as c FROM sales_invoices WHERE created_at >= ?').get(d90).c
+  const paid = req.db.prepare("SELECT COALESCE(SUM(total_amount),0) as s FROM sales_invoices WHERE status='plaćena' AND created_at >= ?").get(d90).s
   res.json({ rfqs, offers, orders, invoices, paid_revenue: paid })
 })
 
 router.get('/production-efficiency', auth, (req, res) => {
-  const rows = db.prepare(`
+  const rows = req.db.prepare(`
     SELECT date(checked_at) as day,
       SUM(good_qty) as good_parts, SUM(rejected_qty) as scrap_parts,
       CASE WHEN SUM(good_qty)+SUM(rejected_qty)>0 THEN ROUND(SUM(good_qty)*100.0/(SUM(good_qty)+SUM(rejected_qty)),1) ELSE 100 END as quality_rate

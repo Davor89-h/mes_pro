@@ -64,7 +64,7 @@ function useIsMobile() {
 
 export default function AppLayout() {
   const { t } = useTranslation()
-  const { user, logout } = useAuth()
+  const { user, tenant, logout } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
   const isMobile = useIsMobile()
@@ -163,7 +163,7 @@ export default function AppLayout() {
             </div>
             {expanded && <div>
               <div style={{ fontSize:14, fontWeight:700, color:'#E8F2F0', letterSpacing:3, lineHeight:1 }}>DEER</div>
-              <div style={{ fontSize:9, color:C.teal, letterSpacing:2 }}>MES v6</div>
+              <div style={{ fontSize:9, color:C.teal, letterSpacing:2 }}>MES v3</div>
             </div>}
           </div>
 
@@ -211,7 +211,7 @@ export default function AppLayout() {
                 </div>
                 <div>
                   <div style={{ fontSize:14, fontWeight:700, color:'#E8F2F0', letterSpacing:3, lineHeight:1 }}>DEER</div>
-                  <div style={{ fontSize:9, color:C.teal, letterSpacing:2 }}>MES v6</div>
+                  <div style={{ fontSize:9, color:C.teal, letterSpacing:2 }}>MES v3</div>
                 </div>
               </div>
               <button onClick={()=>setSidebarOpen(false)}
@@ -268,7 +268,7 @@ export default function AppLayout() {
           )}
 
           <div style={{ minWidth:0 }}>
-            <div style={{ fontSize:isMobile?8:9, color:C.muted, letterSpacing:2 }}>DEER MES v6</div>
+            <div style={{ fontSize:isMobile?8:9, color:C.muted, letterSpacing:2 }}>DEER MES v3</div>
             <div style={{ fontSize:isMobile?12:15, fontWeight:700, color:'#E8F2F0', letterSpacing:isMobile?1:2, whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>{pageTitle}</div>
           </div>
 

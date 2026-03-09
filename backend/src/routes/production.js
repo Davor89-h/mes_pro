@@ -1,7 +1,7 @@
 const express = require('express')
 const router = express.Router()
 const { auth } = require('../middleware/auth')
-const db = require('../db')
+// db is now req.db (tenant-isolated, set by tenantMiddleware)
 
 router.use(auth)
 
@@ -11,7 +11,7 @@ router.get('/schedule', (req, res) => {
     const { from, to } = req.query
     const dateFrom = from || new Date().toISOString().split('T')[0]
     const dateTo   = to   || new Date(Date.now()+14*86400000).toISOString().split('T')[0]
-    const rows = db.all(`
+    const rows = req.db.all(`
       SELECT ps.*,
         w.work_order_id, w.part_name, w.quantity, w.quantity_done, w.status as wo_status,
         w.priority, w.material, w.cycle_time_sec,
@@ -33,9 +33,9 @@ router.get('/machine-load', (req, res) => {
     const { from, to } = req.query
     const dateFrom = from || new Date().toISOString().split('T')[0]
     const dateTo   = to   || new Date(Date.now()+14*86400000).toISOString().split('T')[0]
-    const machines = db.all("SELECT * FROM machines WHERE status != 'fault'")
+    const machines = req.db.all("SELECT * FROM machines WHERE status != 'fault'")
     const result = machines.map(m => {
-      const scheduled = db.all(`
+      const scheduled = req.db.all(`
         SELECT ps.*, w.work_order_id, w.part_name, w.quantity, w.status as wo_status, w.priority
         FROM production_schedule ps
         JOIN work_orders w ON ps.work_order_id=w.id
@@ -62,7 +62,7 @@ router.get('/machine-load', (req, res) => {
 // GET unscheduled work orders (queue)
 router.get('/queue', (req, res) => {
   try {
-    const rows = db.all(`
+    const rows = req.db.all(`
       SELECT w.*, m.name as machine_name,
         (SELECT COUNT(*) FROM production_schedule WHERE work_order_id=w.id) as scheduled
       FROM work_orders w
@@ -82,7 +82,7 @@ router.post('/schedule', (req, res) => {
       return res.status(400).json({ error: 'work_order_id, machine_id, scheduled_start, scheduled_end required' })
 
     // Conflict detection
-    const conflicts = db.all(`
+    const conflicts = req.db.all(`
       SELECT ps.*, w.work_order_id as wo_code, w.part_name
       FROM production_schedule ps
       JOIN work_orders w ON ps.work_order_id=w.id
@@ -91,15 +91,15 @@ router.post('/schedule', (req, res) => {
         AND ps.scheduled_start < ? AND ps.scheduled_end > ?`,
       [machine_id, work_order_id, scheduled_end, scheduled_start])
 
-    const r = db.prepare(`INSERT OR REPLACE INTO production_schedule (work_order_id,machine_id,scheduled_start,scheduled_end,status,priority,notes) VALUES (?,?,?,?,'planned',?,?)`)
+    const r = req.db.prepare(`INSERT OR REPLACE INTO production_schedule (work_order_id,machine_id,scheduled_start,scheduled_end,status,priority,notes) VALUES (?,?,?,?,'planned',?,?)`)
       .run(work_order_id, machine_id, scheduled_start, scheduled_end, priority||50, notes||'')
 
     // Update WO status to planned
-    db.prepare("UPDATE work_orders SET status='planned', updated_at=datetime('now') WHERE id=? AND status='draft'")
+    req.db.prepare("UPDATE work_orders SET status='planned', updated_at=datetime('now') WHERE id=? AND status='draft'")
       .run(work_order_id)
 
     res.json({
-      schedule: db.get('SELECT * FROM production_schedule WHERE id=?', [r.lastInsertRowid]),
+      schedule: req.db.get('SELECT * FROM production_schedule WHERE id=?', [r.lastInsertRowid]),
       conflicts: conflicts
     })
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -109,16 +109,16 @@ router.post('/schedule', (req, res) => {
 router.patch('/schedule/:id', (req, res) => {
   try {
     const { status, notes } = req.body
-    db.prepare('UPDATE production_schedule SET status=?,notes=COALESCE(?,notes) WHERE id=?')
+    req.db.prepare('UPDATE production_schedule SET status=?,notes=COALESCE(?,notes) WHERE id=?')
       .run(status, notes||null, req.params.id)
-    res.json(db.get('SELECT * FROM production_schedule WHERE id=?', [req.params.id]))
+    res.json(req.db.get('SELECT * FROM production_schedule WHERE id=?', [req.params.id]))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // DELETE schedule entry
 router.delete('/schedule/:id', (req, res) => {
   try {
-    db.prepare('DELETE FROM production_schedule WHERE id=?').run(req.params.id)
+    req.db.prepare('DELETE FROM production_schedule WHERE id=?').run(req.params.id)
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -126,11 +126,11 @@ router.delete('/schedule/:id', (req, res) => {
 // POST auto-schedule: assign pending WOs to available machines
 router.post('/auto-schedule', (req, res) => {
   try {
-    const pendingWOs = db.all(`
+    const pendingWOs = req.db.all(`
       SELECT * FROM work_orders WHERE status IN ('draft','planned') AND machine_id IS NOT NULL
       ORDER BY CASE priority WHEN 'urgent' THEN 1 WHEN 'high' THEN 2 WHEN 'normal' THEN 3 ELSE 4 END,
                planned_start ASC LIMIT 20`)
-    const machines = db.all("SELECT * FROM machines WHERE status NOT IN ('fault','maintenance')")
+    const machines = req.db.all("SELECT * FROM machines WHERE status NOT IN ('fault','maintenance')")
     const scheduled = []
     const today = new Date()
 
@@ -142,11 +142,11 @@ router.post('/auto-schedule', (req, res) => {
       const startDt = new Date(startDate + 'T08:00:00')
       const endDt   = new Date(startDt.getTime() + estHours * 3600000)
 
-      const existing = db.get('SELECT id FROM production_schedule WHERE work_order_id=?', [wo.id])
+      const existing = req.db.get('SELECT id FROM production_schedule WHERE work_order_id=?', [wo.id])
       if (!existing) {
-        db.prepare(`INSERT INTO production_schedule (work_order_id,machine_id,scheduled_start,scheduled_end,status,priority) VALUES (?,?,?,?,'planned',?)`)
+        req.db.prepare(`INSERT INTO production_schedule (work_order_id,machine_id,scheduled_start,scheduled_end,status,priority) VALUES (?,?,?,?,'planned',?)`)
           .run(wo.id, machine.id, startDt.toISOString(), endDt.toISOString(), 50-i)
-        db.prepare("UPDATE work_orders SET status='planned',updated_at=datetime('now') WHERE id=? AND status='draft'").run(wo.id)
+        req.db.prepare("UPDATE work_orders SET status='planned',updated_at=datetime('now') WHERE id=? AND status='draft'").run(wo.id)
         scheduled.push({ wo: wo.work_order_id, machine: machine.name })
       }
     })

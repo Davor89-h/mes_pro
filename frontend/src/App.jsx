@@ -1,4 +1,5 @@
 import { Routes, Route, Navigate } from 'react-router-dom'
+import SuperAdminPage from './pages/SuperAdminPage'
 import { useAuth } from './context/AuthContext'
 import LoginPage from './pages/LoginPage'
 import AppLayout from './components/AppLayout'
@@ -42,6 +43,7 @@ function Private({ children }) {
 export default function App() {
   const { user } = useAuth()
   return (
+    <>
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace/> : <LoginPage/>}/>
       <Route path="/" element={<Private><AppLayout/></Private>}>
@@ -79,5 +81,9 @@ export default function App() {
       </Route>
       <Route path="*" element={<Navigate to="/" replace/>}/>
     </Routes>
+    <Routes>
+      <Route path="/superadmin" element={<SuperAdminPage/>}/>
+    </Routes>
+  </>
   )
 }
