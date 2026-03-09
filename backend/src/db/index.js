@@ -385,6 +385,69 @@ async function init() {
       updated_at TEXT DEFAULT (datetime('now'))
     )`)
 
+  // ── RBAC TABLES ─────────────────────────────────────────
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS roles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      label TEXT,
+      description TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`)
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS permissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT UNIQUE NOT NULL,
+      module TEXT,
+      description TEXT
+    )`)
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS role_permissions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      role_id INTEGER NOT NULL,
+      permission_id INTEGER NOT NULL,
+      UNIQUE(role_id, permission_id)
+    )`)
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS user_roles (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      role_id INTEGER NOT NULL,
+      granted_by INTEGER,
+      granted_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(user_id, role_id)
+    )`)
+  // ── END RBAC TABLES ──────────────────────────────────────
+
+  // ── TASK MANAGEMENT TABLES ───────────────────────────────
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS tasks (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      title TEXT NOT NULL,
+      description TEXT,
+      assigned_to INTEGER,
+      assigned_by INTEGER,
+      priority TEXT DEFAULT 'normal',
+      status TEXT DEFAULT 'open',
+      module TEXT,
+      due_date TEXT,
+      completed_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`)
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS task_checklist_items (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL,
+      label TEXT NOT NULL,
+      completed INTEGER DEFAULT 0,
+      completed_at TEXT,
+      completed_by INTEGER,
+      sort_order INTEGER DEFAULT 0
+    )`)
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS task_comments (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      task_id INTEGER NOT NULL,
+      user_id INTEGER NOT NULL,
+      comment TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`)
+  // ── END TASK MANAGEMENT TABLES ───────────────────────────
+
   // ── KONTROLING TABLES ────────────────────────────────
   sqlDb.run(`CREATE TABLE IF NOT EXISTS kontroling_budzet (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -493,6 +556,101 @@ async function init() {
       ['MAT-001','Aluminij EN AW-2024','Sirovine',150,50,'kg'])
     sqlDb.run(`INSERT INTO warehouse_items (code,name,category,current_qty,min_qty,unit) VALUES (?,?,?,?,?,?)`,
       ['MAT-002','Čelik 42CrMo4','Sirovine',80,100,'kg'])
+
+
+    // ── RBAC SEED ─────────────────────────────────────────────
+    const ROLES = [
+      ['admin',       'Administrator',  'Puni pristup svemu'],
+      ['manager',     'Manager',        'Pregled i upravljanje'],
+      ['operator',    'Operater',       'Radni nalozi, produkcija'],
+      ['maintenance', 'Održavanje',     'Strojevi, održavanje'],
+      ['quality',     'Kvaliteta',      'Kontrola kvalitete'],
+      ['warehouse',   'Skladištar',     'Skladište, materijali'],
+    ]
+    ROLES.forEach(([name, label, desc]) =>
+      sqlDb.run('INSERT OR IGNORE INTO roles (name,label,description) VALUES (?,?,?)', [name,label,desc])
+    )
+
+    const PERMISSIONS = [
+      ['machines.read',       'machines',    'Pregled strojeva'],
+      ['machines.write',      'machines',    'Upravljanje strojevima'],
+      ['production.read',     'production',  'Pregled produkcije'],
+      ['production.start',    'production',  'Pokretanje produkcije'],
+      ['production.stop',     'production',  'Zaustavljanje produkcije'],
+      ['work_orders.read',    'work_orders', 'Pregled radnih naloga'],
+      ['work_orders.write',   'work_orders', 'Kreiranje/uređivanje RN'],
+      ['warehouse.read',      'warehouse',   'Pregled skladišta'],
+      ['warehouse.manage',    'warehouse',   'Upravljanje skladištem'],
+      ['tools.read',          'tools',       'Pregled alata'],
+      ['tools.write',         'tools',       'Upravljanje alatima'],
+      ['maintenance.read',    'maintenance', 'Pregled održavanja'],
+      ['maintenance.write',   'maintenance', 'Kreiranje radnih naloga održavanja'],
+      ['quality.read',        'quality',     'Pregled kvalitete'],
+      ['quality.write',       'quality',     'Unos kontrole kvalitete'],
+      ['oee.read',            'oee',         'Pregled OEE'],
+      ['oee.write',           'oee',         'Unos OEE podataka'],
+      ['tasks.read',          'tasks',       'Pregled zadataka'],
+      ['tasks.write',         'tasks',       'Kreiranje zadataka'],
+      ['tasks.assign',        'tasks',       'Dodjela zadataka'],
+      ['tasks.complete',      'tasks',       'Zatvaranje zadataka'],
+      ['users.read',          'users',       'Pregled korisnika'],
+      ['users.manage',        'users',       'Upravljanje korisnicima'],
+      ['sales.read',          'sales',       'Pregled prodaje'],
+      ['sales.write',         'sales',       'Upravljanje prodajom'],
+      ['kontroling.read',     'kontroling',  'Pregled kontrolinga'],
+      ['kontroling.write',    'kontroling',  'Upravljanje kontrolingom'],
+    ]
+    PERMISSIONS.forEach(([name, module, desc]) =>
+      sqlDb.run('INSERT OR IGNORE INTO permissions (name,module,description) VALUES (?,?,?)', [name,module,desc])
+    )
+
+    // Assign all permissions to admin role
+    const adminRole = sqlDb.exec("SELECT id FROM roles WHERE name='admin'")[0]?.values[0]?.[0]
+    const allPerms = sqlDb.exec('SELECT id FROM permissions')[0]?.values || []
+    allPerms.forEach(([pid]) => {
+      if (adminRole) sqlDb.run('INSERT OR IGNORE INTO role_permissions (role_id,permission_id) VALUES (?,?)', [adminRole, pid])
+    })
+
+    // Manager: all read + some write
+    const managerRole = sqlDb.exec("SELECT id FROM roles WHERE name='manager'")[0]?.values[0]?.[0]
+    const managerPerms = ['machines.read','production.read','production.start','work_orders.read','work_orders.write','warehouse.read','tools.read','maintenance.read','quality.read','oee.read','tasks.read','tasks.write','tasks.assign','users.read','sales.read','kontroling.read']
+    managerPerms.forEach(p => {
+      const pid = sqlDb.exec(`SELECT id FROM permissions WHERE name='${p}'`)[0]?.values[0]?.[0]
+      if (managerRole && pid) sqlDb.run('INSERT OR IGNORE INTO role_permissions (role_id,permission_id) VALUES (?,?)', [managerRole, pid])
+    })
+
+    // Operator perms
+    const opRole = sqlDb.exec("SELECT id FROM roles WHERE name='operator'")[0]?.values[0]?.[0]
+    const opPerms = ['machines.read','production.read','production.start','production.stop','work_orders.read','tools.read','tasks.read','tasks.complete']
+    opPerms.forEach(p => {
+      const pid = sqlDb.exec(`SELECT id FROM permissions WHERE name='${p}'`)[0]?.values[0]?.[0]
+      if (opRole && pid) sqlDb.run('INSERT OR IGNORE INTO role_permissions (role_id,permission_id) VALUES (?,?)', [opRole, pid])
+    })
+
+    // Assign admin user to admin role, operator to operator role
+    const adminUser = sqlDb.exec("SELECT id FROM users WHERE username='admin'")[0]?.values[0]?.[0]
+    const opUser = sqlDb.exec("SELECT id FROM users WHERE username='operator'")[0]?.values[0]?.[0]
+    if (adminUser && adminRole) sqlDb.run('INSERT OR IGNORE INTO user_roles (user_id,role_id) VALUES (?,?)', [adminUser, adminRole])
+    if (opUser && opRole) sqlDb.run('INSERT OR IGNORE INTO user_roles (user_id,role_id) VALUES (?,?)', [opUser, opRole])
+
+    // Sample tasks seed
+    if (adminUser) {
+      sqlDb.run(`INSERT INTO tasks (title,description,assigned_to,assigned_by,priority,status,module,due_date) VALUES (?,?,?,?,?,?,?,?)`,
+        ['Preventivni servis STR-001','Provjeriti ulje, filtre i sva podmazivanja na DMU 50',opUser||1,adminUser,'high','open','maintenance',new Date(Date.now()+2*86400000).toISOString().split('T')[0]])
+      sqlDb.run(`INSERT INTO tasks (title,description,assigned_to,assigned_by,priority,status,module,due_date) VALUES (?,?,?,?,?,?,?,?)`,
+        ['Kontrola kvalitete WO-2025-001','Izmjeriti sve dimenzije na prvih 5 komada nosača osi X',opUser||1,adminUser,'high','in_progress','quality',new Date(Date.now()+1*86400000).toISOString().split('T')[0]])
+      sqlDb.run(`INSERT INTO tasks (title,description,assigned_to,assigned_by,priority,status,module) VALUES (?,?,?,?,?,?,?)`,
+        ['Naručiti svrdla Ø8 HSS-Co','Zalihe ispod minimuma, naručiti min 20 kom',adminUser,adminUser,'normal','open','warehouse'])
+
+      // Checklist items for first task
+      const t1 = sqlDb.exec('SELECT id FROM tasks LIMIT 1')[0]?.values[0]?.[0]
+      if (t1) {
+        ['Provjera razine ulja','Zamjena filtera ulja','Podmazivanje vodilica','Test okretaja na prazno','Dokumentirati servis'].forEach((label, i) => {
+          sqlDb.run('INSERT INTO task_checklist_items (task_id,label,sort_order) VALUES (?,?,?)', [t1, label, i])
+        })
+      }
+    }
+    // ── END RBAC SEED ─────────────────────────────────────────
 
     // MES v2 — Work Orders seed
     sqlDb.run(`INSERT INTO work_orders (work_order_id,part_name,drawing_number,quantity,machine_id,operator_id,status,priority,material,estimated_time_min,cycle_time_sec,planned_start,planned_end,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,

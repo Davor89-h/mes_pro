@@ -85,6 +85,39 @@ export default function DashboardPage() {
         </>
       )}
 
+
+      {/* Section: ZADACI */}
+      {data.taskStats && (
+        <>
+          <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:12 }}>
+            <div style={{ width:3,height:16,background:`linear-gradient(${C.accent},${C.accent}44)`,borderRadius:2 }}/>
+            <div style={{ fontSize:10,color:C.accent,letterSpacing:2 }}>ZADACI</div>
+          </div>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:26 }}>
+            <StatCard label="Otvoreni zadaci" value={(data.taskStats.open||0)+(data.taskStats.in_progress||0)} color="yellow" onClick={()=>navigate('/tasks')}/>
+            <StatCard label="Moji zadaci" value={data.taskStats.my_tasks||0} color="teal" onClick={()=>navigate('/tasks')}/>
+            <StatCard label="Hitni" value={data.taskStats.urgent_tasks||0} color="red" onClick={()=>navigate('/tasks')}/>
+            <StatCard label="Kasni" value={data.taskStats.overdue_tasks||0} color="orange" onClick={()=>navigate('/tasks')}/>
+          </div>
+        </>
+      )}
+
+      {/* Section: STROJEVI */}
+      {data.machines && (
+        <>
+          <div style={{ display:'flex',alignItems:'center',gap:10,marginBottom:12 }}>
+            <div style={{ width:3,height:16,background:`linear-gradient(${C.teal},${C.teal}44)`,borderRadius:2 }}/>
+            <div style={{ fontSize:10,color:C.teal,letterSpacing:2 }}>STATUS STROJEVA</div>
+          </div>
+          <div style={{ display:'grid',gridTemplateColumns:'repeat(4,1fr)',gap:14,marginBottom:26 }}>
+            <StatCard label="Ukupno strojeva" value={data.machines.total||0} color="yellow" onClick={()=>navigate('/machines')}/>
+            <StatCard label="U radu" value={data.machines.running||0} color="green" onClick={()=>navigate('/machines')}/>
+            <StatCard label="U stanju mirovanja" value={data.machines.idle||0} color="teal" onClick={()=>navigate('/machines')}/>
+            <StatCard label="U održavanju" value={data.machines.maintenance||0} color="orange" onClick={()=>navigate('/machine-maintenance')}/>
+          </div>
+        </>
+      )}
+
       {/* Bottom panels */}
       <div style={{ display:'grid',gridTemplateColumns:'1fr 1fr',gap:20 }}>
         {/* Alerts */}

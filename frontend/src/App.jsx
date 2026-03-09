@@ -31,6 +31,8 @@ import OEEMonitoringPage from './pages/OEEMonitoringPage'
 import ToolLifePage from './pages/ToolLifePage'
 import ProductionPlanningPage from './pages/ProductionPlanningPage'
 import KontrolingPage from './pages/KontrolingPage'
+import TasksPage from './pages/TasksPage'
+import UserManagementPage from './pages/UserManagementPage'
 
 function Private({ children }) {
   const { user } = useAuth()
@@ -56,6 +58,8 @@ export default function App() {
         <Route path="tool-life" element={<ToolLifePage/>}/>
         <Route path="production-planning" element={<ProductionPlanningPage/>}/>
         <Route path="kontroling" element={<KontrolingPage/>}/>
+        <Route path="tasks" element={<TasksPage/>}/>
+        <Route path="user-management" element={<UserManagementPage/>}/>
         <Route path="fixtures" element={<FixturesPage/>}/>
         <Route path="usage" element={<UsageTrackingPage/>}/>
         <Route path="machines" element={<MachinesPage/>}/>

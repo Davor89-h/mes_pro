@@ -12,14 +12,16 @@ import {
   LogOut, Bell, ChevronRight, ChevronLeft, MessageSquare,
   Code2, Calendar, Monitor, Layers, Hammer, Menu, X,
   ShoppingCart, FolderOpen, BarChart2, CheckSquare, Warehouse, UserCircle, Calculator,
-  ClipboardList, Activity as ActivityIcon, Gauge, TrendingUp, CalendarDays, PieChart
+  ClipboardList, Activity as ActivityIcon, Gauge, TrendingUp, CalendarDays, PieChart, Users
 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { to:'/', key:'dashboard', Icon:LayoutDashboard, exact:true, group:'main' },
+  { to:'/tasks', key:'tasks', Icon:CheckSquare, group:'main' },
   { to:'/kpi', key:'kpi', Icon:BarChart2, group:'v6' },
   { to:'/kalkulacije', key:'kalkulacije', Icon:Calculator, group:'v6' },
   { to:'/kontroling', key:'kontroling', Icon:PieChart, group:'v6' },
+  { to:'/user-management', key:'user_management', Icon:Users, group:'v6' },
   { to:'/work-orders', key:'work_orders', Icon:ClipboardList, group:'mes2' },
   { to:'/production-planning', key:'production_planning', Icon:CalendarDays, group:'mes2' },
   { to:'/oee-monitoring', key:'oee_monitoring', Icon:Gauge, group:'mes2' },
@@ -47,7 +49,7 @@ const NAV_ITEMS = [
   { to:'/machine-maintenance', key:'machine_maint', Icon:Hammer, group:'workflow' },
 ]
 
-const GROUP_LABELS = { v6:'MES v6', mes2:'MES v2 — PRODUKCIJA', fixture:'STROJEVI', mes:'ALATI & NAPRAVE', ai:'ML / AI', workflow:'WORKFLOW' }
+const GROUP_LABELS = { main:'GLAVNI IZBORNIK', v6:'MES v6', mes2:'MES v2 — PRODUKCIJA', fixture:'STROJEVI', mes:'ALATI & NAPRAVE', ai:'ML / AI', workflow:'WORKFLOW' }
 
 // Hook to detect mobile
 function useIsMobile() {
