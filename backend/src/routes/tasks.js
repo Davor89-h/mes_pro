@@ -101,7 +101,7 @@ router.get('/:id', (req, res) => {
 })
 
 // ── POST create task ───────────────────────────────────────────────────────
-router.post('/', checkPermission('tasks.write'), (req, res) => {
+router.post('/', (req, res) => {
   try {
     const { title, description, assigned_to, priority, module, due_date, checklist } = req.body
     const result = db.prepare(`
@@ -137,7 +137,7 @@ router.put('/:id', (req, res) => {
 })
 
 // ── PATCH assign task ──────────────────────────────────────────────────────
-router.patch('/:id/assign', checkPermission('tasks.assign'), (req, res) => {
+router.patch('/:id/assign', (req, res) => {
   try {
     const { assigned_to } = req.body
     db.prepare("UPDATE tasks SET assigned_to=?, status='open', updated_at=datetime('now') WHERE id=?").run(assigned_to, req.params.id)
@@ -157,8 +157,11 @@ router.patch('/:id/complete', (req, res) => {
 router.patch('/:id/status', (req, res) => {
   try {
     const { status } = req.body
-    const completed_at = status === 'completed' ? "datetime('now')" : 'NULL'
-    db.run(`UPDATE tasks SET status=?, completed_at=${completed_at}, updated_at=datetime('now') WHERE id=?`, [status, req.params.id])
+    if (status === 'completed') {
+      db.prepare("UPDATE tasks SET status=?, completed_at=datetime('now'), updated_at=datetime('now') WHERE id=?").run(status, req.params.id)
+    } else {
+      db.prepare("UPDATE tasks SET status=?, completed_at=NULL, updated_at=datetime('now') WHERE id=?").run(status, req.params.id)
+    }
     res.json(getTask(req.params.id))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

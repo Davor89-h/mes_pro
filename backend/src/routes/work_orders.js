@@ -49,6 +49,19 @@ router.get('/', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+// GET stats overview  ← MUST be before /:id
+router.get('/stats/overview', (req, res) => {
+  try {
+    const byStatus = db.all('SELECT status, COUNT(*) as cnt FROM work_orders GROUP BY status')
+    const stats = {}; byStatus.forEach(r => { stats[r.status] = r.cnt })
+    const today = new Date().toISOString().split('T')[0]
+    const overdue = db.get(`SELECT COUNT(*) as c FROM work_orders WHERE planned_end < ? AND status NOT IN ('completed','closed','cancelled')`, [today])
+    const inProgress = db.all(`SELECT w.*, m.name as machine_name FROM work_orders w LEFT JOIN machines m ON w.machine_id=m.id WHERE w.status='in_progress'`)
+    const completedToday = db.get(`SELECT COUNT(*) as c FROM work_orders WHERE DATE(actual_end)=? AND status='completed'`, [today])
+    res.json({ ...stats, overdue: overdue.c, in_progress_list: inProgress, completed_today: completedToday.c })
+  } catch (e) { res.status(500).json({ error: e.message }) }
+})
+
 // GET single WO with tools
 router.get('/:id', (req, res) => {
   try {
@@ -189,17 +202,5 @@ router.delete('/:id', (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
-// GET stats overview
-router.get('/stats/overview', (req, res) => {
-  try {
-    const byStatus = db.all('SELECT status, COUNT(*) as cnt FROM work_orders GROUP BY status')
-    const stats = {}; byStatus.forEach(r => { stats[r.status] = r.cnt })
-    const today = new Date().toISOString().split('T')[0]
-    const overdue = db.get(`SELECT COUNT(*) as c FROM work_orders WHERE planned_end < ? AND status NOT IN ('completed','closed','cancelled')`, [today])
-    const inProgress = db.all(`SELECT w.*, m.name as machine_name FROM work_orders w LEFT JOIN machines m ON w.machine_id=m.id WHERE w.status='in_progress'`)
-    const completedToday = db.get(`SELECT COUNT(*) as c FROM work_orders WHERE DATE(actual_end)=? AND status='completed'`, [today])
-    res.json({ ...stats, overdue: overdue.c, in_progress_list: inProgress, completed_today: completedToday.c })
-  } catch (e) { res.status(500).json({ error: e.message }) }
-})
 
 module.exports = router
