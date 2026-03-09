@@ -11,6 +11,7 @@ export default {
     orders: 'Aufträge',
     ai: 'KI-Einblicke',
     users: 'Benutzer',
+    kontroling: 'Controlling',
     kalkulacije: 'Kalkulation',
     work_orders: 'Fertigungsaufträge',
     production_planning: 'Produktionsplanung',

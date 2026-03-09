@@ -37,6 +37,7 @@ db.init().then(() => {
   app.use('/api/tool-life',   require('./routes/tool_life'))
   app.use('/api/oee',         require('./routes/oee'))
   app.use('/api/production',  require('./routes/production'))
+  app.use('/api/kontroling', require('./routes/kontroling'))
   // ── END MES v2 ROUTES ──────────────────────────────
 
   // Try multiple possible frontend dist paths

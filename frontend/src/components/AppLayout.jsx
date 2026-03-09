@@ -12,13 +12,14 @@ import {
   LogOut, Bell, ChevronRight, ChevronLeft, MessageSquare,
   Code2, Calendar, Monitor, Layers, Hammer, Menu, X,
   ShoppingCart, FolderOpen, BarChart2, CheckSquare, Warehouse, UserCircle, Calculator,
-  ClipboardList, Activity as ActivityIcon, Gauge, TrendingUp, CalendarDays
+  ClipboardList, Activity as ActivityIcon, Gauge, TrendingUp, CalendarDays, PieChart
 } from 'lucide-react'
 
 const NAV_ITEMS = [
   { to:'/', key:'dashboard', Icon:LayoutDashboard, exact:true, group:'main' },
   { to:'/kpi', key:'kpi', Icon:BarChart2, group:'v6' },
   { to:'/kalkulacije', key:'kalkulacije', Icon:Calculator, group:'v6' },
+  { to:'/kontroling', key:'kontroling', Icon:PieChart, group:'v6' },
   { to:'/work-orders', key:'work_orders', Icon:ClipboardList, group:'mes2' },
   { to:'/production-planning', key:'production_planning', Icon:CalendarDays, group:'mes2' },
   { to:'/oee-monitoring', key:'oee_monitoring', Icon:Gauge, group:'mes2' },

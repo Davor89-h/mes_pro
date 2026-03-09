@@ -19,6 +19,7 @@ export default {
     digital_twin: 'Digitalni dvojnik',
     forms: 'Zahtjevi',
     machine_maint: 'Održavanje strojeva',
+    kontroling: 'Kontroling',
     kalkulacije: 'Kalkulacije',
     work_orders: 'Radni nalozi',
     production_planning: 'Plan produkcije',

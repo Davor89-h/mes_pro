@@ -385,6 +385,65 @@ async function init() {
       updated_at TEXT DEFAULT (datetime('now'))
     )`)
 
+  // ── KONTROLING TABLES ────────────────────────────────
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS kontroling_budzet (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      godina INTEGER NOT NULL,
+      mjesec INTEGER NOT NULL,
+      kategorija TEXT NOT NULL,
+      opis TEXT,
+      iznos_plan REAL DEFAULT 0,
+      iznos_stvarni REAL DEFAULT 0,
+      napomena TEXT,
+      kreirao_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`)
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS kontroling_masinski_sat (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      machine_id INTEGER NOT NULL,
+      trosak_amortizacija REAL DEFAULT 0,
+      trosak_struja REAL DEFAULT 0,
+      trosak_odrzavanje REAL DEFAULT 0,
+      trosak_ostalo REAL DEFAULT 0,
+      trosak_ukupno_sat REAL DEFAULT 0,
+      vrijedi_od TEXT NOT NULL,
+      napomena TEXT,
+      kreirao_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`)
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS kontroling_nalog_troskovi (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      work_order_id INTEGER NOT NULL,
+      kategorija TEXT NOT NULL,
+      opis TEXT,
+      kolicina REAL DEFAULT 1,
+      jedinicna_cijena REAL DEFAULT 0,
+      ukupno REAL DEFAULT 0,
+      napomena TEXT,
+      kreirao_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now'))
+    )`)
+  sqlDb.run(`CREATE TABLE IF NOT EXISTS kontroling_profitabilnost (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      partner_id INTEGER,
+      proizvod TEXT NOT NULL,
+      period_god INTEGER NOT NULL,
+      period_mj INTEGER NOT NULL,
+      prihod REAL DEFAULT 0,
+      trosak_materijal REAL DEFAULT 0,
+      trosak_rad REAL DEFAULT 0,
+      trosak_rezija REAL DEFAULT 0,
+      ukupni_trosak REAL DEFAULT 0,
+      bruto_dobit REAL DEFAULT 0,
+      marza_posto REAL DEFAULT 0,
+      napomena TEXT,
+      kreirao_id INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    )`)
+  // ── END KONTROLING TABLES ────────────────────────────
+
   // Seed if empty
   const userCount = toObject(sqlDb.exec('SELECT COUNT(*) as c FROM users'))?.c || 0
   if (userCount === 0) {
