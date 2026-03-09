@@ -440,7 +440,7 @@ async function init() {
       ['WO-2025-001','Nosač osi X','DWG-100016',20,1,2,'in_progress','high','Nehrđajući čelik 1.4404',480,45.0,new Date().toISOString().split('T')[0],new Date(Date.now()+3*86400000).toISOString().split('T')[0],1])
     sqlDb.run(`INSERT INTO work_orders (work_order_id,part_name,drawing_number,quantity,machine_id,operator_id,status,priority,material,estimated_time_min,cycle_time_sec,planned_start,planned_end,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ['WO-2025-002','Kućište pumpe','DWG-200048',5,2,2,'planned','normal','Aluminij EN AW-2024',720,360.0,new Date(Date.now()+2*86400000).toISOString().split('T')[0],new Date(Date.now()+7*86400000).toISOString().split('T')[0],1])
-    sqlDb.run(`INSERT INTO work_orders (work_order_id,part_name,drawing_number,quantity,machine_id,operator_id,status,priority,material,estimated_time_min,cycle_time_sec,planned_start,planned_end,quantity_done,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    sqlDb.run(`INSERT INTO work_orders (work_order_id,part_name,drawing_number,quantity,machine_id,operator_id,status,priority,material,estimated_time_min,cycle_time_sec,planned_start,planned_end,quantity_done,created_by) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ['WO-2025-003','Osovina B14','DWG-300012',50,3,2,'completed','normal','Čelik 42CrMo4',240,18.0,new Date(Date.now()-5*86400000).toISOString().split('T')[0],new Date(Date.now()-1*86400000).toISOString().split('T')[0],50,1])
 
     // MES v2 — Tool Life seed
