@@ -1,15 +1,15 @@
 const express = require('express')
 const router = express.Router()
 const { auth } = require('../middleware/auth')
-// db is now req.db (tenant-isolated, set by tenantMiddleware)
+const db = require('../db')
 
 router.use(auth)
 
 // ── Helper: auto-generate OEE snapshot when WO closes ──
 function updateOEE(machine_id, date) {
   if (!machine_id) return
-  const rec = req.db.get('SELECT * FROM oee_records WHERE machine_id=? AND record_date=? AND shift="A"', [machine_id, date])
-  const wos = req.db.all(`SELECT * FROM work_orders WHERE machine_id=? AND DATE(actual_end)=? AND status IN ('completed','closed')`, [machine_id, date])
+  const rec = db.get('SELECT * FROM oee_records WHERE machine_id=? AND record_date=? AND shift="A"', [machine_id, date])
+  const wos = db.all(`SELECT * FROM work_orders WHERE machine_id=? AND DATE(actual_end)=? AND status IN ('completed','closed')`, [machine_id, date])
   if (!wos.length) return
   const parts_good = wos.reduce((s,w) => s + (w.quantity_done||0), 0)
   const parts_scrap = wos.reduce((s,w) => s + (w.quantity_scrap||0), 0)
@@ -21,10 +21,10 @@ function updateOEE(machine_id, date) {
   const qual = parts_produced > 0 ? Math.min(1, parts_good / parts_produced) : 1
   const oee = Math.round(avail * perf * qual * 100) / 100
   if (rec) {
-    req.db.prepare(`UPDATE oee_records SET parts_produced=?,parts_good=?,parts_scrap=?,availability=?,performance=?,quality=?,oee=? WHERE id=?`)
+    db.prepare(`UPDATE oee_records SET parts_produced=?,parts_good=?,parts_scrap=?,availability=?,performance=?,quality=?,oee=? WHERE id=?`)
       .run(parts_produced, parts_good, parts_scrap, Math.round(avail*100)/100, Math.round(perf*100)/100, Math.round(qual*100)/100, oee, rec.id)
   } else {
-    req.db.prepare(`INSERT INTO oee_records (machine_id,record_date,shift,planned_time_min,parts_produced,parts_target,parts_good,parts_scrap,availability,performance,quality,oee) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
+    db.prepare(`INSERT INTO oee_records (machine_id,record_date,shift,planned_time_min,parts_produced,parts_target,parts_good,parts_scrap,availability,performance,quality,oee) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`)
       .run(machine_id, date, 'A', 480, parts_produced, target, parts_good, parts_scrap, Math.round(avail*100)/100, Math.round(perf*100)/100, Math.round(qual*100)/100, oee)
   }
 }
@@ -32,7 +32,7 @@ function updateOEE(machine_id, date) {
 // GET all work orders with joins
 router.get('/', (req, res) => {
   try {
-    const rows = req.db.all(`
+    const rows = db.all(`
       SELECT w.*,
         m.name as machine_name, m.machine_id as machine_code,
         u.first_name||' '||u.last_name as operator_name,
@@ -52,12 +52,12 @@ router.get('/', (req, res) => {
 // GET stats overview  ← MUST be before /:id
 router.get('/stats/overview', (req, res) => {
   try {
-    const byStatus = req.db.all('SELECT status, COUNT(*) as cnt FROM work_orders GROUP BY status')
+    const byStatus = db.all('SELECT status, COUNT(*) as cnt FROM work_orders GROUP BY status')
     const stats = {}; byStatus.forEach(r => { stats[r.status] = r.cnt })
     const today = new Date().toISOString().split('T')[0]
-    const overdue = req.db.get(`SELECT COUNT(*) as c FROM work_orders WHERE planned_end < ? AND status NOT IN ('completed','closed','cancelled')`, [today])
-    const inProgress = req.db.all(`SELECT w.*, m.name as machine_name FROM work_orders w LEFT JOIN machines m ON w.machine_id=m.id WHERE w.status='in_progress'`)
-    const completedToday = req.db.get(`SELECT COUNT(*) as c FROM work_orders WHERE DATE(actual_end)=? AND status='completed'`, [today])
+    const overdue = db.get(`SELECT COUNT(*) as c FROM work_orders WHERE planned_end < ? AND status NOT IN ('completed','closed','cancelled')`, [today])
+    const inProgress = db.all(`SELECT w.*, m.name as machine_name FROM work_orders w LEFT JOIN machines m ON w.machine_id=m.id WHERE w.status='in_progress'`)
+    const completedToday = db.get(`SELECT COUNT(*) as c FROM work_orders WHERE DATE(actual_end)=? AND status='completed'`, [today])
     res.json({ ...stats, overdue: overdue.c, in_progress_list: inProgress, completed_today: completedToday.c })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -65,24 +65,24 @@ router.get('/stats/overview', (req, res) => {
 // GET single WO with tools
 router.get('/:id', (req, res) => {
   try {
-    const wo = req.db.get(`
+    const wo = db.get(`
       SELECT w.*, m.name as machine_name, u.first_name||' '||u.last_name as operator_name
       FROM work_orders w
       LEFT JOIN machines m ON w.machine_id=m.id
       LEFT JOIN users u ON w.operator_id=u.id
       WHERE w.id=?`, [req.params.id])
     if (!wo) return res.status(404).json({ error: 'Not found' })
-    const tools = req.db.all(`
+    const tools = db.all(`
       SELECT wt.*, t.name as tool_name, t.category, t.current_quantity, t.status as tool_status
       FROM work_order_tools wt
       JOIN tools t ON wt.tool_id=t.id
       WHERE wt.work_order_id=?`, [req.params.id])
-    const logs = req.db.all(`
+    const logs = db.all(`
       SELECT pl.*, u.first_name||' '||u.last_name as operator_name
       FROM production_logs pl
       LEFT JOIN users u ON pl.operator_id=u.id
       WHERE pl.work_order_id=? ORDER BY pl.event_time DESC LIMIT 20`, [req.params.id])
-    const costs = req.db.all('SELECT * FROM production_costs WHERE work_order_id=?', [req.params.id])
+    const costs = db.all('SELECT * FROM production_costs WHERE work_order_id=?', [req.params.id])
     res.json({ ...wo, tools, logs, costs })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -96,7 +96,7 @@ router.post('/', (req, res) => {
     if (!part_name) return res.status(400).json({ error: 'part_name required' })
 
     const wo_id = 'WO-' + new Date().getFullYear() + '-' + String(Date.now()).slice(-4)
-    const r = req.db.prepare(`
+    const r = db.prepare(`
       INSERT INTO work_orders (work_order_id,part_name,drawing_number,quantity,machine_id,operator_id,
         sales_order_id,kalkulacija_id,priority,material,estimated_time_min,cycle_time_sec,
         planned_start,planned_end,notes,status,created_by,created_at,updated_at)
@@ -110,10 +110,10 @@ router.post('/', (req, res) => {
     // Assign tools
     if (Array.isArray(tool_ids)) {
       tool_ids.forEach((tid, i) => {
-        if (tid) req.db.prepare('INSERT INTO work_order_tools (work_order_id,tool_id,tool_position) VALUES (?,?,?)').run(woId, tid, i+1)
+        if (tid) db.prepare('INSERT INTO work_order_tools (work_order_id,tool_id,tool_position) VALUES (?,?,?)').run(woId, tid, i+1)
       })
     }
-    res.json(req.db.get('SELECT * FROM work_orders WHERE id=?', [woId]))
+    res.json(db.get('SELECT * FROM work_orders WHERE id=?', [woId]))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -123,7 +123,7 @@ router.put('/:id', (req, res) => {
     const { part_name, drawing_number, quantity, machine_id, operator_id, priority, material,
             estimated_time_min, cycle_time_sec, planned_start, planned_end, notes,
             quantity_done, quantity_scrap } = req.body
-    req.db.prepare(`
+    db.prepare(`
       UPDATE work_orders SET part_name=?,drawing_number=?,quantity=?,machine_id=?,operator_id=?,
         priority=?,material=?,estimated_time_min=?,cycle_time_sec=?,planned_start=?,planned_end=?,
         notes=?,quantity_done=COALESCE(?,quantity_done),quantity_scrap=COALESCE(?,quantity_scrap),
@@ -134,7 +134,7 @@ router.put('/:id', (req, res) => {
            quantity_done!=null ? parseInt(quantity_done) : null,
            quantity_scrap!=null ? parseInt(quantity_scrap) : null,
            req.params.id)
-    res.json(req.db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id]))
+    res.json(db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id]))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -142,7 +142,7 @@ router.put('/:id', (req, res) => {
 router.patch('/:id/status', (req, res) => {
   try {
     const { status, notes } = req.body
-    const wo = req.db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id])
+    const wo = db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id])
     if (!wo) return res.status(404).json({ error: 'Not found' })
 
     const now = new Date().toISOString()
@@ -151,7 +151,7 @@ router.patch('/:id/status', (req, res) => {
     if (status === 'in_progress' && !wo.actual_start) {
       extra.actual_start = now
       // Log start event
-      req.db.prepare(`INSERT INTO production_logs (work_order_id,machine_id,operator_id,event_type,event_time,notes) VALUES (?,?,?,?,?,?)`)
+      db.prepare(`INSERT INTO production_logs (work_order_id,machine_id,operator_id,event_type,event_time,notes) VALUES (?,?,?,?,?,?)`)
         .run(wo.id, wo.machine_id, req.user.id, 'start', now, notes||'')
     }
     if ((status === 'completed' || status === 'paused') && !wo.actual_end) {
@@ -160,16 +160,16 @@ router.patch('/:id/status', (req, res) => {
       if (wo.actual_start) {
         const diffMin = Math.round((Date.now() - new Date(wo.actual_start)) / 60000)
         extra.actual_time_min = diffMin
-        req.db.prepare(`INSERT INTO production_logs (work_order_id,machine_id,operator_id,event_type,event_time,duration_min,notes) VALUES (?,?,?,?,?,?,?)`)
+        db.prepare(`INSERT INTO production_logs (work_order_id,machine_id,operator_id,event_type,event_time,duration_min,notes) VALUES (?,?,?,?,?,?,?)`)
           .run(wo.id, wo.machine_id, req.user.id, status, now, diffMin, notes||'')
         if (status === 'completed') updateOEE(wo.machine_id, now.split('T')[0])
       }
     }
 
-    req.db.prepare(`UPDATE work_orders SET status=?,${Object.keys(extra).map(k=>k+'=?').join(',')},updated_at=datetime('now') WHERE id=?`)
+    db.prepare(`UPDATE work_orders SET status=?,${Object.keys(extra).map(k=>k+'=?').join(',')},updated_at=datetime('now') WHERE id=?`)
       .run(status, ...Object.values(extra), req.params.id)
 
-    res.json(req.db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id]))
+    res.json(db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id]))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -177,27 +177,27 @@ router.patch('/:id/status', (req, res) => {
 router.post('/:id/log', (req, res) => {
   try {
     const { quantity_produced, quantity_scrap, notes } = req.body
-    const wo = req.db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id])
+    const wo = db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id])
     if (!wo) return res.status(404).json({ error: 'Not found' })
     const good = parseInt(quantity_produced)||0
     const scrap = parseInt(quantity_scrap)||0
-    req.db.prepare(`UPDATE work_orders SET quantity_done=quantity_done+?,quantity_scrap=quantity_scrap+?,updated_at=datetime('now') WHERE id=?`)
+    db.prepare(`UPDATE work_orders SET quantity_done=quantity_done+?,quantity_scrap=quantity_scrap+?,updated_at=datetime('now') WHERE id=?`)
       .run(good, scrap, req.params.id)
-    req.db.prepare(`INSERT INTO production_logs (work_order_id,machine_id,operator_id,event_type,event_time,quantity_produced,quantity_scrap,notes) VALUES (?,?,?,?,datetime('now'),?,?,?)`)
+    db.prepare(`INSERT INTO production_logs (work_order_id,machine_id,operator_id,event_type,event_time,quantity_produced,quantity_scrap,notes) VALUES (?,?,?,?,datetime('now'),?,?,?)`)
       .run(wo.id, wo.machine_id, req.user.id, 'production', good, scrap, notes||'')
-    res.json(req.db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id]))
+    res.json(db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id]))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // DELETE WO
 router.delete('/:id', (req, res) => {
   try {
-    const wo = req.db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id])
+    const wo = db.get('SELECT * FROM work_orders WHERE id=?', [req.params.id])
     if (!wo) return res.status(404).json({ error: 'Not found' })
     if (['in_progress'].includes(wo.status)) return res.status(400).json({ error: 'Cannot delete active WO' })
-    req.db.prepare('DELETE FROM work_order_tools WHERE work_order_id=?').run(req.params.id)
-    req.db.prepare('DELETE FROM production_logs WHERE work_order_id=?').run(req.params.id)
-    req.db.prepare('DELETE FROM work_orders WHERE id=?').run(req.params.id)
+    db.prepare('DELETE FROM work_order_tools WHERE work_order_id=?').run(req.params.id)
+    db.prepare('DELETE FROM production_logs WHERE work_order_id=?').run(req.params.id)
+    db.prepare('DELETE FROM work_orders WHERE id=?').run(req.params.id)
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })

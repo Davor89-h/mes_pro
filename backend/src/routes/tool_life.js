@@ -1,14 +1,14 @@
 const express = require('express')
 const router = express.Router()
 const { auth } = require('../middleware/auth')
-// db is now req.db (tenant-isolated, set by tenantMiddleware)
+const db = require('../db')
 
 router.use(auth)
 
 // GET all tool life records with tool info
 router.get('/', (req, res) => {
   try {
-    const rows = req.db.all(`
+    const rows = db.all(`
       SELECT tl.*, t.name as tool_name, t.category, t.internal_id,
         t.current_quantity,
         CASE
@@ -27,10 +27,10 @@ router.get('/', (req, res) => {
 // GET tool life for specific tool
 router.get('/tool/:tool_id', (req, res) => {
   try {
-    const life = req.db.get('SELECT * FROM tool_life WHERE tool_id=?', [req.params.tool_id])
-    const tool = req.db.get('SELECT * FROM tools WHERE id=?', [req.params.tool_id])
+    const life = db.get('SELECT * FROM tool_life WHERE tool_id=?', [req.params.tool_id])
+    const tool = db.get('SELECT * FROM tools WHERE id=?', [req.params.tool_id])
     if (!tool) return res.status(404).json({ error: 'Tool not found' })
-    const history = req.db.all(`
+    const history = db.all(`
       SELECT tl.*, w.work_order_id, w.part_name, m.name as machine_name
       FROM tool_life tl
       LEFT JOIN work_orders w ON tl.work_order_id=w.id
@@ -45,15 +45,15 @@ router.post('/', (req, res) => {
   try {
     const { tool_id, life_limit_strokes, life_limit_minutes, notes } = req.body
     if (!tool_id) return res.status(400).json({ error: 'tool_id required' })
-    const existing = req.db.get('SELECT * FROM tool_life WHERE tool_id=? AND work_order_id IS NULL', [tool_id])
+    const existing = db.get('SELECT * FROM tool_life WHERE tool_id=? AND work_order_id IS NULL', [tool_id])
     if (existing) {
-      req.db.prepare(`UPDATE tool_life SET life_limit_strokes=?,life_limit_minutes=?,notes=?,updated_at=datetime('now') WHERE id=?`)
+      db.prepare(`UPDATE tool_life SET life_limit_strokes=?,life_limit_minutes=?,notes=?,updated_at=datetime('now') WHERE id=?`)
         .run(parseInt(life_limit_strokes)||0, parseFloat(life_limit_minutes)||0, notes||'', existing.id)
-      res.json(req.db.get('SELECT * FROM tool_life WHERE id=?', [existing.id]))
+      res.json(db.get('SELECT * FROM tool_life WHERE id=?', [existing.id]))
     } else {
-      const r = req.db.prepare(`INSERT INTO tool_life (tool_id,life_limit_strokes,life_limit_minutes,status,notes) VALUES (?,?,?,'ok',?)`)
+      const r = db.prepare(`INSERT INTO tool_life (tool_id,life_limit_strokes,life_limit_minutes,status,notes) VALUES (?,?,?,'ok',?)`)
         .run(tool_id, parseInt(life_limit_strokes)||0, parseFloat(life_limit_minutes)||0, notes||'')
-      res.json(req.db.get('SELECT * FROM tool_life WHERE id=?', [r.lastInsertRowid]))
+      res.json(db.get('SELECT * FROM tool_life WHERE id=?', [r.lastInsertRowid]))
     }
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -62,7 +62,7 @@ router.post('/', (req, res) => {
 router.patch('/:id/use', (req, res) => {
   try {
     const { strokes, minutes, work_order_id, machine_id } = req.body
-    const tl = req.db.get('SELECT * FROM tool_life WHERE id=?', [req.params.id])
+    const tl = db.get('SELECT * FROM tool_life WHERE id=?', [req.params.id])
     if (!tl) return res.status(404).json({ error: 'Not found' })
     const newStrokes = tl.strokes_used + (parseInt(strokes)||0)
     const newMins = tl.minutes_used + (parseFloat(minutes)||0)
@@ -77,17 +77,17 @@ router.patch('/:id/use', (req, res) => {
       if (pct >= 1) status = 'replace'
       else if (pct >= 0.85) status = 'warning'
     }
-    req.db.prepare(`UPDATE tool_life SET strokes_used=?,minutes_used=?,status=?,updated_at=datetime('now') WHERE id=?`)
+    db.prepare(`UPDATE tool_life SET strokes_used=?,minutes_used=?,status=?,updated_at=datetime('now') WHERE id=?`)
       .run(newStrokes, newMins, status, req.params.id)
     // Auto alert if status changed
     if (status !== tl.status) {
-      const tool = req.db.get('SELECT name FROM tools WHERE id=?', [tl.tool_id])
+      const tool = db.get('SELECT name FROM tools WHERE id=?', [tl.tool_id])
       const msg = status === 'replace'
         ? `Alat ${tool?.name} — ZAMJENA: dostignut životni vijek!`
         : `Alat ${tool?.name} — UPOZORENJE: 85% životnog vijeka`
-      req.db.prepare(`INSERT INTO alerts (type,message) VALUES (?,?)`).run(status === 'replace' ? 'critical' : 'warning', msg)
+      db.prepare(`INSERT INTO alerts (type,message) VALUES (?,?)`).run(status === 'replace' ? 'critical' : 'warning', msg)
     }
-    res.json(req.db.get('SELECT * FROM tool_life WHERE id=?', [req.params.id]))
+    res.json(db.get('SELECT * FROM tool_life WHERE id=?', [req.params.id]))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
@@ -95,15 +95,15 @@ router.patch('/:id/use', (req, res) => {
 router.patch('/:id/reset', (req, res) => {
   try {
     const { notes } = req.body
-    req.db.prepare(`UPDATE tool_life SET strokes_used=0,minutes_used=0,status='ok',last_sharpened=datetime('now'),updated_at=datetime('now') WHERE id=?`).run(req.params.id)
-    res.json(req.db.get('SELECT * FROM tool_life WHERE id=?', [req.params.id]))
+    db.prepare(`UPDATE tool_life SET strokes_used=0,minutes_used=0,status='ok',last_sharpened=datetime('now'),updated_at=datetime('now') WHERE id=?`).run(req.params.id)
+    res.json(db.get('SELECT * FROM tool_life WHERE id=?', [req.params.id]))
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
 // GET tools that need attention
 router.get('/alerts/pending', (req, res) => {
   try {
-    const rows = req.db.all(`
+    const rows = db.all(`
       SELECT tl.*, t.name as tool_name, t.category,
         CASE
           WHEN tl.life_limit_strokes > 0 THEN ROUND(tl.strokes_used * 100.0 / tl.life_limit_strokes, 1)

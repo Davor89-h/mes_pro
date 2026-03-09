@@ -1,14 +1,14 @@
 const express = require('express')
 const router = express.Router()
 const { auth } = require('../middleware/auth')
-// db is now req.db (tenant-isolated, set by tenantMiddleware)
+const db = require('../db')
 
 router.use(auth)
 
 // GET all kalkulacije
 router.get('/', (req, res) => {
   try {
-    const rows = req.db.all(`
+    const rows = db.all(`
       SELECT k.*, u.first_name || ' ' || u.last_name as kreirao_ime
       FROM kalkulacije k
       LEFT JOIN users u ON k.kreirao_id = u.id
@@ -21,7 +21,7 @@ router.get('/', (req, res) => {
 // GET single kalkulacija
 router.get('/:id', (req, res) => {
   try {
-    const k = req.db.get('SELECT * FROM kalkulacije WHERE id = ?', [req.params.id])
+    const k = db.get('SELECT * FROM kalkulacije WHERE id = ?', [req.params.id])
     if (!k) return res.status(404).json({ error: 'Not found' })
     k.data = JSON.parse(k.data || '{}')
     res.json(k)
@@ -32,11 +32,11 @@ router.get('/:id', (req, res) => {
 router.post('/', (req, res) => {
   try {
     const { naziv, broj_nacrta, materijal, naziv_dijela, ident_nr, varijanta, data, status, napomena } = req.body
-    const result = req.db.prepare(`
+    const result = db.prepare(`
       INSERT INTO kalkulacije (naziv, broj_nacrta, materijal, naziv_dijela, ident_nr, varijanta, data, status, napomena, kreirao_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'))
     `).run(naziv, broj_nacrta || '', materijal || '', naziv_dijela || '', ident_nr || '', varijanta || '50', JSON.stringify(data || {}), status || 'draft', napomena || '', req.user.id)
-    const created = req.db.get('SELECT * FROM kalkulacije WHERE id = ?', [result.lastInsertRowid])
+    const created = db.get('SELECT * FROM kalkulacije WHERE id = ?', [result.lastInsertRowid])
     created.data = JSON.parse(created.data || '{}')
     res.json(created)
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -46,11 +46,11 @@ router.post('/', (req, res) => {
 router.put('/:id', (req, res) => {
   try {
     const { naziv, broj_nacrta, materijal, naziv_dijela, ident_nr, varijanta, data, status, napomena } = req.body
-    req.db.prepare(`
+    db.prepare(`
       UPDATE kalkulacije SET naziv=?, broj_nacrta=?, materijal=?, naziv_dijela=?, ident_nr=?, varijanta=?, data=?, status=?, napomena=?, updated_at=datetime('now')
       WHERE id=?
     `).run(naziv, broj_nacrta || '', materijal || '', naziv_dijela || '', ident_nr || '', varijanta || '50', JSON.stringify(data || {}), status || 'draft', napomena || '', req.params.id)
-    const updated = req.db.get('SELECT * FROM kalkulacije WHERE id = ?', [req.params.id])
+    const updated = db.get('SELECT * FROM kalkulacije WHERE id = ?', [req.params.id])
     updated.data = JSON.parse(updated.data || '{}')
     res.json(updated)
   } catch (e) { res.status(500).json({ error: e.message }) }
@@ -59,7 +59,7 @@ router.put('/:id', (req, res) => {
 // DELETE kalkulacija
 router.delete('/:id', (req, res) => {
   try {
-    req.db.prepare('DELETE FROM kalkulacije WHERE id = ?').run(req.params.id)
+    db.prepare('DELETE FROM kalkulacije WHERE id = ?').run(req.params.id)
     res.json({ ok: true })
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
@@ -67,9 +67,9 @@ router.delete('/:id', (req, res) => {
 // POST duplicate kalkulacija
 router.post('/:id/duplicate', (req, res) => {
   try {
-    const original = req.db.get('SELECT * FROM kalkulacije WHERE id = ?', [req.params.id])
+    const original = db.get('SELECT * FROM kalkulacije WHERE id = ?', [req.params.id])
     if (!original) return res.status(404).json({ error: 'Not found' })
-    const result = req.db.prepare(`
+    const result = db.prepare(`
       INSERT INTO kalkulacije (naziv, broj_nacrta, materijal, naziv_dijela, ident_nr, varijanta, data, status, napomena, kreirao_id, created_at, updated_at)
       VALUES (?, ?, ?, ?, ?, ?, ?, 'draft', ?, ?, datetime('now'), datetime('now'))
     `).run(
@@ -77,7 +77,7 @@ router.post('/:id/duplicate', (req, res) => {
       original.naziv_dijela, original.ident_nr, original.varijanta,
       original.data, original.napomena, req.user.id
     )
-    const created = req.db.get('SELECT * FROM kalkulacije WHERE id = ?', [result.lastInsertRowid])
+    const created = db.get('SELECT * FROM kalkulacije WHERE id = ?', [result.lastInsertRowid])
     created.data = JSON.parse(created.data || '{}')
     res.json(created)
   } catch (e) { res.status(500).json({ error: e.message }) }

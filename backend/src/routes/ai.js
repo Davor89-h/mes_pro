@@ -10,7 +10,7 @@
  */
 
 const router = require('express').Router()
-// db passed as parameter in multi-tenant mode
+const db = require('../db')
 const { auth } = require('../middleware/auth')
 
 // Opcionalni Claude kao "mozak" — baza je uvijek lokalna
@@ -25,7 +25,7 @@ try {
 // ═══════════════════════════════════════════════════════════════════════════
 // KNOWLEDGE BASE — čita sve relevantne podatke iz baze
 // ═══════════════════════════════════════════════════════════════════════════
-function buildKnowledgeBase(db) {
+function buildKnowledgeBase() {
   const kb = {}
 
   // Strojevi
@@ -616,7 +616,7 @@ function buildInsights(kb) {
 // GET /ai/insights — KPI kartice + uvidi
 router.get('/insights', auth, (req, res) => {
   try {
-    const kb = buildKnowledgeBase(req.db)
+    const kb = buildKnowledgeBase()
     const util = kb.fixtures.length > 0 ? Math.round(kb.fixtures.filter(f=>f.status==='in_production').length*100/kb.fixtures.length) : 0
     const stats = {
       total_fixtures: kb.fixtures.length,
@@ -634,7 +634,7 @@ router.post('/chat', auth, (req, res) => {
     const { message, history = [] } = req.body
     if (!message) return res.status(400).json({ error: 'Poruka je obavezna' })
 
-    const kb = buildKnowledgeBase(req.db)
+    const kb = buildKnowledgeBase()
     const reply = localAI(message, history, kb)
 
     res.json({ reply, ai_powered: false, local_ai: true, timestamp: new Date().toISOString() })
