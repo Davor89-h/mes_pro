@@ -749,4 +749,41 @@ router.get('/oee', auth, (req, res) => {
   } catch (e) { res.status(500).json({ error: e.message }) }
 })
 
+
+// ═══════════════════════════════════════════════════════════════════════════
+// G-CODE ANALYSIS — POST /ai/gcode
+// Supports: multipart/form-data (field: gcode) OR JSON { gcode_text: "..." }
+// ═══════════════════════════════════════════════════════════════════════════
+const _gcodeAnalyzer = require('../services/gcodeAnalyzer')
+const _gcodeML       = require('../services/gcodeML')
+const _multer        = require('multer')
+const _osGcode       = require('os')
+const _fsGcode       = require('fs')
+
+const _gcodeUpload = _multer({
+  dest: _osGcode.tmpdir(),
+  limits: { fileSize: 100 * 1024 * 1024 },
+})
+
+router.post('/gcode', auth, _gcodeUpload.single('gcode'), async (req, res) => {
+  try {
+    let result
+
+    if (req.file) {
+      result = await _gcodeAnalyzer.analyzeFile(req.file.path, req.file.originalname)
+      try { _fsGcode.unlinkSync(req.file.path) } catch (_) {}
+    } else if (req.body && req.body.gcode_text) {
+      result = _gcodeAnalyzer.analyzeText(req.body.gcode_text, 'program.nc')
+    } else {
+      return res.status(400).json({ error: 'Nema G-koda. Pošaljite datoteku (field: gcode) ili JSON { gcode_text }' })
+    }
+
+    result.ml_suggestions = _gcodeML.learn(result)
+    res.json(result)
+  } catch (e) {
+    console.error('[/ai/gcode]', e)
+    res.status(500).json({ error: e.message })
+  }
+})
+
 module.exports = router
